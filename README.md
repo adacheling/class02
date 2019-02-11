@@ -422,3 +422,181 @@ let addx x = x + x
 
 Calling `add2` with value `2` now yields `4` instead of `8`.
 
+### Determining Static Scopes
+
+To understand how to determine the static scopes of variables in a
+given program it is helpful to remember that programs can be
+understood as abstract syntax trees. The view of programs as trees is
+invaluable in understanding scopes. Let us explain this through an example.
+
+Consider the following program:
+
+ 
+```scala
+ 0: var x = 2;
+ 1: 
+ 2: { var x = 3;
+ 3:
+ 4:   { x = x + 1;
+ 5:    
+ 6:     var x = 2;
+ 7:
+ 8:     x = x + 1;
+ 9:   }
+10: }
+11:
+12: { var y;
+13:
+14:   y = x + 1;
+15: }
+```
+ 
+
+Let us analyze this program using C's declaration order rules (i.e.,
+the scope of a variable declaration extends from the declaration to
+the end of the block). We can make this explicit in the program above
+by introducing an extra code block that encompasses the declaration on
+line 6 up to the end of line 8:
+
+ 
+```scala
+var x = 2;
+
+{ var x = 3;
+
+  { x = x + 1;
+    
+    { var x = 2;
+
+      x = x + 1; 
+    }
+  }
+}
+
+{ var y;
+
+  y = x + 1;
+}
+```
+ 
+
+Now we have essentially one block per scope. So let's name all the
+blocks so that we can talk about them more easily:
+
+ 
+```scala
+var x = 2;
+
+1: { var x = 3;
+
+     1.1: { x = x + 1;
+    
+            1.1.1: { var x = 2;
+
+                     x = x + 1;
+                   }
+          }
+   }
+
+2: { var y;
+
+     y = x + 1;
+   }
+```
+
+There is also the implicit top-level block in which we have the
+top-level declaration on line 0 of the original program as well as
+blocks 1 and 2. Let's call this block 0. So we can now arrange all
+these blocks in a tree according to their nesting structure. Let's
+also compute for each block the set of variable names that are
+declared directly in that block. This gives us:
+
+ 
+```
+     0
+    / \
+   1   2
+  /
+ 1.1
+  |
+1.1.1
+```
+
+Variables declared in each scope
+```
+0: x
+1: x
+1.1: -none-
+1.1.1: x
+2: y
+```
+
+Now, suppose we want to determine which declaration the name `x`
+appearing on line 4 of the original program refers to. This line
+belongs to block `1.1`. To determine the right declaration we now walk
+up the tree starting from node `1.1` and stop at the first node that has
+a declaration for `x`. Since `1.1` has no declaration for `x`, we go to its
+parent block `1`. This block has a declaration `x`: the one on line 2. So
+that's the variable `x` that the occurrence of `x` on line 4 refers to.
+
+Let us do the same for the occurrence of `x` on line 14. This line
+belongs to block `2`. So we start our search there. Block `2` has no
+declaration for `x`, so we go to its parent which is block `0`. Block `0`
+has a declaration for `x`: the one on line 0. So that is the declaration
+that the occurrence of `x` on line 14 refers to.
+
+Now let us repeat this game for the same program but with the
+declaration order of C#/Scala, i.e., the scope of a declaration
+extends the entire block where the declaration occurs. That is, we
+have no implicit block `1.1.1` in this case:
+
+ 
+```scala
+var x = 2;
+
+1: { var x = 3;
+
+     1.1: { x = x + 1;
+    
+            var x = 2;
+
+            x = x + 1;
+          }
+   }
+
+2: { var y;
+
+     y = x + 1;
+
+   }
+```
+
+We draw the tree and compute variable declarations per block:
+ 
+```
+     0
+    / \
+   1   2
+  /
+ 1.1
+```
+
+Variables declared in each scope
+
+```
+0: x
+1: x
+1.1: x
+2: y
+```
+
+Now, again we determine which declaration of `x` the occurrence on line
+4 of the original program refers to. We start from block `1.1` to which
+line 4 belongs. This block has a declaration: the one on line 6. So
+this is the declaration this occurrence of `x` refers to. Since line 4
+comes before line 6, this is a case of "use variable before it's
+declared". So the compiler would reject this program with a static
+semantic error.
+
+For the occurrence of `x` on line 14, the analysis would proceed as
+before.
