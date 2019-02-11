@@ -452,7 +452,7 @@ Consider the following program:
 ```
  
 
-Let us analyze this program using C's declaration order rules (i.e.,
+Let us analyze this program using C/Java's declaration order rules (i.e.,
 the scope of a variable declaration extends from the declaration to
 the end of the block). We can make this explicit in the program above
 by introducing an extra code block that encompasses the declaration on
